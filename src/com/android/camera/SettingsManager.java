@@ -40,13 +40,16 @@ import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.MediaRecorder;
 import android.media.CamcorderProfile;
+import android.media.MediaCodecInfo;
+import android.media.MediaCodecInfo.CodecCapabilities;
+import android.media.MediaCodecInfo.VideoCapabilities;
+import android.media.MediaCodecList;
+import android.media.MediaFormat;
 import android.preference.PreferenceManager;
 import android.util.Log;
 import android.util.Range;
 import android.util.Rational;
 import android.util.Size;
-import android.media.EncoderCapabilities;
-import android.media.EncoderCapabilities.VideoEncoderCap;
 
 import com.android.camera.imageprocessor.filter.BeautificationFilter;
 import com.android.camera.imageprocessor.filter.BestpictureFilter;
@@ -1535,45 +1538,29 @@ private void filterHFROptions() {
         return supportedIso;
     }
 
-    private boolean isVideoResolutionSupportedByEncoder(Size videoSize, VideoEncoderCap encoderCap) {
-        boolean supported = false;
-        if (videoSize == null || encoderCap == null) {
-            return supported;
-        }
-        if (videoSize.getWidth() > encoderCap.mMaxFrameWidth ||
-                videoSize.getWidth() < encoderCap.mMinFrameWidth ||
-                videoSize.getHeight() > encoderCap.mMaxFrameHeight ||
-                videoSize.getHeight() < encoderCap.mMinFrameHeight) {
-            Log.e(TAG, "Codec = " + encoderCap.mCodec + ", capabilities: " +
-                    "mMinFrameWidth = " + encoderCap.mMinFrameWidth + " , " +
-                    "mMinFrameHeight = " + encoderCap.mMinFrameHeight + " , " +
-                    "mMaxFrameWidth = " + encoderCap.mMaxFrameWidth + " , " +
-                    "mMaxFrameHeight = " + encoderCap.mMaxFrameHeight);
-        } else {
-            supported = true;
-        }
-        return supported;
-    }
-
-    private boolean isCurrentVideoResolutionSupportedByEncoder(VideoEncoderCap encoderCap) {
+    private boolean isCurrentVideoResolutionSupportedByEncoder(MediaCodecInfo info) {
         boolean supported = false;
         ListPreference videoQuality = mPreferenceGroup.findPreference(KEY_VIDEO_QUALITY);
         if (videoQuality == null) return supported;
         String videoSizeStr = videoQuality.getValue();
         if (videoSizeStr != null) {
             Size videoSize = parseSize(videoSizeStr);
-
-            if (videoSize.getWidth() > encoderCap.mMaxFrameWidth ||
-                    videoSize.getWidth() < encoderCap.mMinFrameWidth ||
-                    videoSize.getHeight() > encoderCap.mMaxFrameHeight ||
-                    videoSize.getHeight() < encoderCap.mMinFrameHeight) {
-                Log.e(TAG, "Codec = " + encoderCap.mCodec + ", capabilities: " +
-                        "mMinFrameWidth = " + encoderCap.mMinFrameWidth + " , " +
-                        "mMinFrameHeight = " + encoderCap.mMinFrameHeight + " , " +
-                        "mMaxFrameWidth = " + encoderCap.mMaxFrameWidth + " , " +
-                        "mMaxFrameHeight = " + encoderCap.mMaxFrameHeight);
-            } else {
-                supported = true;
+            String[] supportedTypes = info.getSupportedTypes();
+            MediaCodecInfo.VideoCapabilities capabilities = null;
+            for (String type : supportedTypes) {
+                if (type.equalsIgnoreCase(MediaFormat.MIMETYPE_VIDEO_MPEG4)
+                        || type.equalsIgnoreCase(MediaFormat.MIMETYPE_VIDEO_H263)
+                        || type.equalsIgnoreCase(MediaFormat.MIMETYPE_VIDEO_AVC)
+                        || type.equalsIgnoreCase(MediaFormat.MIMETYPE_VIDEO_HEVC)) {
+                    capabilities = info.getCapabilitiesForType(type).getVideoCapabilities();
+                    if (capabilities == null ||
+                            !capabilities.getSupportedWidths().contains(videoSize.getWidth()) ||
+                            !capabilities.getSupportedWidths().contains(videoSize.getHeight())) {
+                        return false;
+                    } else {
+                        supported = true;
+                    }
+                }
             }
         }
         return supported;
@@ -1581,13 +1568,23 @@ private void filterHFROptions() {
 
     private List<String> getSupportedVideoEncoders() {
         ArrayList<String> supported = new ArrayList<String>();
+        supported.add(SettingTranslation.getVideoEncoder(MediaRecorder.VideoEncoder.DEFAULT));
         String str = null;
-        List<VideoEncoderCap> videoEncoders = EncoderCapabilities.getVideoEncoders();
-        for (VideoEncoderCap videoEncoder: videoEncoders) {
-            str = SettingTranslation.getVideoEncoder(videoEncoder.mCodec);
-            if (str != null) {
-                if (isCurrentVideoResolutionSupportedByEncoder(videoEncoder)) {
-                    supported.add(str);
+        MediaCodecList list = new MediaCodecList(MediaCodecList.ALL_CODECS);
+        MediaCodecInfo[] codecInfos = list.getCodecInfos();
+        for (MediaCodecInfo info: codecInfos) {
+            if (!info.isEncoder() || info.getName().contains("google")) continue;
+            if (info.getSupportedTypes().length > 0 && info.getSupportedTypes()[0] != null){
+                for (String t : info.getSupportedTypes()){
+                    Log.d(TAG,"type="+t);
+                }
+                int type = SettingTranslation.getVideoEncoderType(info.getSupportedTypes()[0]);
+                if (type != -1){
+                    str = SettingTranslation.getVideoEncoder(type);
+                    Log.d(TAG,"type="+type+" str="+str);
+                    if (isCurrentVideoResolutionSupportedByEncoder(info)) {
+                        supported.add(str);
+                    }
                 }
             }
         }
@@ -1596,13 +1593,22 @@ private void filterHFROptions() {
 
     private List<String> getSupportedVideoEncoders(Size videoSize) {
         ArrayList<String> supported = new ArrayList<String>();
-        String str = null;
-        List<VideoEncoderCap> videoEncoders = EncoderCapabilities.getVideoEncoders();
-        for (VideoEncoderCap videoEncoder: videoEncoders) {
-            str = SettingTranslation.getVideoEncoder(videoEncoder.mCodec);
-            if (str != null) {
-                if (isVideoResolutionSupportedByEncoder(videoSize, videoEncoder)) {
-                    supported.add(str);
+        ListPreference videoEncoder = mPreferenceGroup.findPreference(KEY_VIDEO_ENCODER);
+        if (videoEncoder == null) return supported;
+
+        if (videoEncoder != null) {
+            String str = null;
+            MediaCodecList list = new MediaCodecList(MediaCodecList.ALL_CODECS);
+            MediaCodecInfo[] codecInfos = list.getCodecInfos();
+            for (MediaCodecInfo info: codecInfos) {
+                if ( info.isEncoder() ) {
+                    int type = SettingTranslation.getVideoEncoderType(info.getSupportedTypes()[0]);
+                    if (type != -1){
+                        str = SettingTranslation.getVideoEncoder(type);
+                        if (isCurrentVideoResolutionSupportedByEncoder(info)) {
+                            supported.add(str);
+                        }
+                    }
                 }
             }
         }

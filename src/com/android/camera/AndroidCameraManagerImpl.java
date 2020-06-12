@@ -39,8 +39,6 @@ import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
 import android.view.SurfaceHolder;
-import android.hardware.Camera.CameraDataCallback;
-import android.hardware.Camera.CameraMetaDataCallback;
 import com.android.camera.util.ApiHelper;
 import android.os.ConditionVariable;
 import java.lang.reflect.Method;
@@ -391,7 +389,7 @@ class AndroidCameraManagerImpl implements CameraManager {
                         return;
 
                     case SET_HISTOGRAM_MODE:
-                        CameraWrapper.setHistogramMode(mCamera, (CameraDataCallback) msg.obj);
+                        //CameraWrapper.setHistogramMode(mCamera, (CameraDataCallback) msg.obj);
                         break;
 
                     case SEND_HISTOGRAM_DATA:
@@ -403,7 +401,7 @@ class AndroidCameraManagerImpl implements CameraManager {
                         break;
 
                     case SET_AUTO_HDR_MODE:
-                        CameraWrapper.setMetadataCb(mCamera, (CameraMetaDataCallback) msg.obj);
+                        //CameraWrapper.setMetadataCb(mCamera, (CameraMetaDataCallback) msg.obj);
                         break;
 
                     default:
@@ -501,10 +499,6 @@ class AndroidCameraManagerImpl implements CameraManager {
         @Override
         public void lock() {
             mCameraHandler.sendEmptyMessage(LOCK);
-        }
-        @Override
-        public void setMetadataCb(CameraMetaDataCallback cb){
-            mCameraHandler.obtainMessage(SET_AUTO_HDR_MODE, cb).sendToTarget();
         }
 
         @Override
@@ -659,11 +653,6 @@ class AndroidCameraManagerImpl implements CameraManager {
         public void setLongshot(boolean enable) {
             mCameraHandler.obtainMessage(SET_LONGSHOT,
                     new Boolean(enable)).sendToTarget();
-        }
-
-        @Override
-        public void setHistogramMode(CameraDataCallback cb) {
-            mCameraHandler.obtainMessage(SET_HISTOGRAM_MODE, cb).sendToTarget();
         }
 
         @Override

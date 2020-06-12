@@ -25,8 +25,6 @@ import android.hardware.Camera.Parameters;
 import android.os.Build;
 import android.os.Handler;
 import android.view.SurfaceHolder;
-import android.hardware.Camera.CameraDataCallback;
-import android.hardware.Camera.CameraMetaDataCallback;
 /**
  * An interface which provides possible camera device operations.
  *
@@ -178,7 +176,7 @@ public interface CameraManager {
          * Sets the metadata cb
          * @cb Metadata callback object
         */
-        public void setMetadataCb (CameraMetaDataCallback cb);
+        //public void setMetadataCb (CameraMetaDataCallback cb);
 
         /**
          * Reconnects to the camera device.
@@ -371,7 +369,7 @@ public interface CameraManager {
          *
          * @param cb   cameraDataCallback to use
          */
-        public void setHistogramMode(CameraDataCallback cb);
+        //public void setHistogramMode(CameraDataCallback cb);
         /**
          * Send the Histogram Data.
          *

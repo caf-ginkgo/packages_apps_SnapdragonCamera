@@ -54,7 +54,6 @@ import android.view.WindowManager;
 import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
 import android.widget.Toast;
-import android.os.SystemProperties;
 
 import com.android.camera.CameraActivity;
 import com.android.camera.CameraDisabledException;

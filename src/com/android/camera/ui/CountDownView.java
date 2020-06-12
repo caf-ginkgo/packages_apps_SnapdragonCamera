@@ -57,11 +57,7 @@ public class CountDownView extends FrameLayout {
 
         if (mSoundPool == null) {
             // Load the beeps
-            if (context.getResources().getBoolean(R.bool.force_count_down_sound)) {
-                mSoundPool = new SoundPool(1, AudioManager.STREAM_SYSTEM_ENFORCED, 0);
-            } else {
-                mSoundPool = new SoundPool(1, AudioManager.STREAM_NOTIFICATION, 0);
-            }
+            mSoundPool = new SoundPool(1, AudioManager.STREAM_NOTIFICATION, 0);
             mBeepOnce = mSoundPool.load(context, R.raw.beep_once, 1);
             mBeepTwice = mSoundPool.load(context, R.raw.beep_twice, 1);
         }
@@ -101,11 +97,7 @@ public class CountDownView extends FrameLayout {
 
             if (mSoundPool == null) {
                 // Load the beeps
-                if (mContext.getResources().getBoolean(R.bool.force_count_down_sound)) {
-                    mSoundPool = new SoundPool(1, AudioManager.STREAM_SYSTEM_ENFORCED, 0);
-                } else {
-                    mSoundPool = new SoundPool(1, AudioManager.STREAM_NOTIFICATION, 0);
-                }
+                mSoundPool = new SoundPool(1, AudioManager.STREAM_NOTIFICATION, 0);
                 mBeepOnce = mSoundPool.load(mContext, R.raw.beep_once, 1);
                 mBeepTwice = mSoundPool.load(mContext, R.raw.beep_twice, 1);
             }

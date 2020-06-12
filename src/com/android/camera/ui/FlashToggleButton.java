@@ -71,15 +71,15 @@ public class FlashToggleButton extends RotateImageView {
             return;
         }
 
-        String userSetting = mContext.getString(
-                R.string.pref_camera_manual_exp_value_user_setting);
+        //String userSetting = mContext.getString(
+        //        R.string.pref_camera_manual_exp_value_user_setting);
         String manualExposureMode = mSettingsManager.getValue(SettingsManager.KEY_MANUAL_EXPOSURE);
         boolean swmfnrEnable = false;
         String swmfnrValue = mSettingsManager.getValue(SettingsManager.KEY_CAPTURE_SWMFNR_VALUE);
         if (swmfnrValue != null) {
             swmfnrEnable = swmfnrValue.equals("1");
         }
-        if (mIndex == -1 || manualExposureMode.equals(userSetting) || swmfnrEnable) {
+        if (mIndex == -1 || /*manualExposureMode.equals(userSetting) ||*/ swmfnrEnable) {
             setVisibility(GONE);
             return;
         } else {

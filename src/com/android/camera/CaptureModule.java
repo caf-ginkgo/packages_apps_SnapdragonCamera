@@ -59,10 +59,13 @@ import android.media.CameraProfile;
 import android.media.Image;
 import android.media.ImageReader;
 import android.media.MediaActionSound;
+import android.media.MediaCodecInfo;
+import android.media.MediaCodecInfo.CodecCapabilities;
+import android.media.MediaCodecInfo.VideoCapabilities;
+import android.media.MediaCodecList;
+import android.media.MediaFormat;
 import android.media.MediaMetadataRetriever;
 import android.media.MediaRecorder;
-import android.media.EncoderCapabilities;
-import android.media.EncoderCapabilities.VideoEncoderCap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Debug;
@@ -114,7 +117,6 @@ import com.android.camera.util.PersistUtil;
 import com.android.camera.util.SettingTranslation;
 import com.android.camera.util.AccessibilityUtils;
 import com.android.camera.util.VendorTagUtil;
-import com.android.internal.util.MemInfoReader;
 
 import org.codeaurora.snapcam.R;
 import org.codeaurora.snapcam.filter.ClearSightImageProcessor;
@@ -695,10 +697,10 @@ public class CaptureModule implements CameraModule, PhotoController,
                     if (mImageReader[id] == null) {
                         break;
                     }
-                    if (r.getRequest().containsTarget(mImageReader[id].getSurface())) {
+                    //if (r.getRequest().containsTarget(mImageReader[id].getSurface())) {
                         zsl = true;
-                        break;
-                    }
+                    //    break;
+                    //}
                 }
                 if (zsl){
                     mPostProcessor.onMetaAvailable(result);
@@ -3925,15 +3927,6 @@ public class CaptureModule implements CameraModule, PhotoController,
         }
         updateHFRSetting();
         updateVideoEncoder();
-        if (!isSessionSupportedByEncoder(mVideoSize.getWidth(), mVideoSize.getHeight(),
-                mHighSpeedCaptureRate)) {
-            mStartRecPending = false;
-            mIsRecordingVideo = false;
-            RotateTextToast.makeText(mActivity,R.string.error_app_unsupported_hfr,
-                    Toast.LENGTH_SHORT).show();
-            return false;
-        }
-
         try {
             setUpMediaRecorder(cameraId);
             mUI.clearFocus();
@@ -4105,32 +4098,6 @@ public class CaptureModule implements CameraModule, PhotoController,
         }
         mStartRecPending = false;
         return true;
-    }
-
-    private boolean isSessionSupportedByEncoder(int w, int h, int fps) {
-        int expectedMBsPerSec = w * h * fps;
-
-        List<VideoEncoderCap> videoEncoders = EncoderCapabilities.getVideoEncoders();
-        for (VideoEncoderCap videoEncoder: videoEncoders) {
-            if (videoEncoder.mCodec == mVideoEncoder) {
-                int maxMBsPerSec = (videoEncoder.mMaxFrameWidth * videoEncoder.mMaxFrameHeight
-                        * videoEncoder.mMaxFrameRate);
-                if (expectedMBsPerSec > maxMBsPerSec) {
-                    Log.e(TAG,"Selected codec " + mVideoEncoder
-                            + " does not support width(" + w
-                            + ") X height ("+ h
-                            + "@ " + fps +" fps");
-                    Log.e(TAG, "Max capabilities: " +
-                            "MaxFrameWidth = " + videoEncoder.mMaxFrameWidth + " , " +
-                            "MaxFrameHeight = " + videoEncoder.mMaxFrameHeight + " , " +
-                            "MaxFrameRate = " + videoEncoder.mMaxFrameRate);
-                    return false;
-                } else {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     private void updateTimeLapseSetting() {
@@ -4748,27 +4715,23 @@ public class CaptureModule implements CameraModule, PhotoController,
             requestedSizeLimit = myExtras.getLong(MediaStore.EXTRA_SIZE_LIMIT);
         }
         //check if codec supports the resolution, otherwise throw toast
-        List<VideoEncoderCap> videoEncoders = EncoderCapabilities.getVideoEncoders();
-        for (VideoEncoderCap videoEnc: videoEncoders) {
-            if (videoEnc.mCodec == mVideoEncoder) {
-                if (videoWidth > videoEnc.mMaxFrameWidth ||
-                        videoWidth < videoEnc.mMinFrameWidth ||
-                        videoHeight > videoEnc.mMaxFrameHeight ||
-                        videoHeight < videoEnc.mMinFrameHeight) {
-                    Log.e(TAG, "Selected codec " + mVideoEncoder +
-                            " does not support "+ videoWidth + "x" + videoHeight
-                            + " resolution");
-                    Log.e(TAG, "Codec capabilities: " +
-                            "mMinFrameWidth = " + videoEnc.mMinFrameWidth + " , " +
-                            "mMinFrameHeight = " + videoEnc.mMinFrameHeight + " , " +
-                            "mMaxFrameWidth = " + videoEnc.mMaxFrameWidth + " , " +
-                            "mMaxFrameHeight = " + videoEnc.mMaxFrameHeight);
-                    mUnsupportedResolution = true;
-                    RotateTextToast.makeText(mActivity, R.string.error_app_unsupported,
-                            Toast.LENGTH_LONG).show();
-                    return;
-                }
-                break;
+        if (DEBUG) Log.d(TAG,"mProfile.videoCodec="+mProfile.videoCodec);
+        String type = SettingTranslation.getVideoEncoderType(mProfile.videoCodec);
+        if (DEBUG) Log.d(TAG,"codec type="+type);
+        MediaCodecList allCodecs = new MediaCodecList(MediaCodecList.ALL_CODECS);
+        MediaFormat format = MediaFormat.createVideoFormat(type,videoWidth,videoHeight);
+        try{
+            String encodeName = allCodecs.findEncoderForFormat(format);
+            if (DEBUG) Log.d(TAG,"encodeName="+encodeName);
+        } catch (IllegalArgumentException| NullPointerException e){
+            e.printStackTrace();
+            if (DEBUG) Log.d(TAG,"error="+e.getLocalizedMessage());
+            mUnsupportedResolution = true;
+        } finally {
+            if (mUnsupportedResolution) {
+                RotateTextToast.makeText(mActivity, R.string.error_app_unsupported_profile,
+                        Toast.LENGTH_LONG).show();
+                return;
             }
         }
 
@@ -4973,22 +4936,15 @@ public class CaptureModule implements CameraModule, PhotoController,
                     Context.ACTIVITY_SERVICE);
             ActivityManager.MemoryInfo memInfo = new ActivityManager.MemoryInfo();
             am.getMemoryInfo(memInfo);
-            SECONDARY_SERVER_MEM = memInfo.secondaryServerThreshold;
         }
 
         long totalMemory = Runtime.getRuntime().totalMemory();
         long maxMemory = Runtime.getRuntime().maxMemory();
         long remainMemory = maxMemory - totalMemory;
 
-        MemInfoReader reader = new MemInfoReader();
-        reader.readMemInfo();
-        long[] info = reader.getRawInfo();
-        long availMem = (info[Debug.MEMINFO_FREE] + info[Debug.MEMINFO_CACHED]) * 1024;
-
-        if (availMem <= SECONDARY_SERVER_MEM || remainMemory <= LONGSHOT_CANCEL_THRESHOLD) {
-            Log.e(TAG, "cancel longshot: free=" + info[Debug.MEMINFO_FREE] * 1024
-                    + " cached=" + info[Debug.MEMINFO_CACHED] * 1024
-                    + " threshold=" + SECONDARY_SERVER_MEM);
+        if (remainMemory <= LONGSHOT_CANCEL_THRESHOLD) {
+            Log.e(TAG, "cancel longshot: remainMemory=" + remainMemory
+                    + " threshold=" + LONGSHOT_CANCEL_THRESHOLD);
             RotateTextToast.makeText(mActivity, R.string.msg_cancel_longshot_for_limited_memory,
                     Toast.LENGTH_SHORT).show();
             return true;
