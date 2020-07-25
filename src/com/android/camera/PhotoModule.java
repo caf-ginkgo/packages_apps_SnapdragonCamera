@@ -100,7 +100,6 @@ import android.content.DialogInterface;
 import android.text.InputType;
 import android.text.TextUtils;
 
-import com.android.internal.util.MemInfoReader;
 import android.app.ActivityManager;
 
 import java.io.ByteArrayOutputStream;
@@ -117,7 +116,6 @@ import android.util.AttributeSet;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.os.SystemProperties;
 import java.util.Collections;
 import java.util.Formatter;
 
@@ -241,7 +239,7 @@ public class PhotoModule
 
     private static final String PERSISI_BOKEH_DEBUG = "persist.sys.camera.bokeh.debug";
     private static final boolean PERSIST_BOKEH_DEBUG_CHECK =
-            android.os.SystemProperties.getBoolean(PERSISI_BOKEH_DEBUG, false);
+            PersistUtil.getBoolean(PERSISI_BOKEH_DEBUG, false);
     private static final int MINIMUM_BRIGHTNESS = 0;
     private static final int MAXIMUM_BRIGHTNESS = 6;
     private static final int DEFAULT_BRIGHTNESS = 3;
@@ -339,8 +337,6 @@ public class PhotoModule
                     : null;
 
     private final CameraErrorCallback mErrorCallback = new CameraErrorCallback();
-    private final StatsCallback mStatsCallback = new StatsCallback();
-    private final MetaDataCallback mMetaDataCallback = new MetaDataCallback();
     private long mFocusStartTime;
     private long mShutterCallbackTime;
     private long mPostViewPictureCallbackTime;
@@ -1068,22 +1064,15 @@ public class PhotoModule
                     Context.ACTIVITY_SERVICE);
             ActivityManager.MemoryInfo memInfo = new ActivityManager.MemoryInfo();
             am.getMemoryInfo(memInfo);
-            SECONDARY_SERVER_MEM = memInfo.secondaryServerThreshold;
         }
 
         long totalMemory = Runtime.getRuntime().totalMemory();
         long maxMemory = Runtime.getRuntime().maxMemory();
         long remainMemory = maxMemory - totalMemory;
 
-        MemInfoReader reader = new MemInfoReader();
-        reader.readMemInfo();
-        long[] info = reader.getRawInfo();
-        long availMem = (info[Debug.MEMINFO_FREE] + info[Debug.MEMINFO_CACHED]) * 1024;
-
-        if (availMem <= SECONDARY_SERVER_MEM || remainMemory <= LONGSHOT_CANCEL_THRESHOLD) {
-            Log.e(TAG, "cancel longshot: free=" + info[Debug.MEMINFO_FREE] * 1024
-                    + " cached=" + info[Debug.MEMINFO_CACHED] * 1024
-                    + " threshold=" + SECONDARY_SERVER_MEM);
+        if (remainMemory <= LONGSHOT_CANCEL_THRESHOLD) {
+            Log.e(TAG, "cancel longshot: remain=" + remainMemory
+                    + " threshold=" + LONGSHOT_CANCEL_THRESHOLD);
             mLongshotActive = false;
             RotateTextToast.makeText(mActivity,R.string.msg_cancel_longshot_for_limited_memory,
                 Toast.LENGTH_SHORT).show();
@@ -1161,115 +1150,6 @@ public class PhotoModule
             if (mRefocus && isShutterSoundOn()) {
                 mSoundPool.play(mRefocusSound, 1.0f, 1.0f, 0, 0, 1.0f);
             }
-        }
-    }
-
-    private final class StatsCallback
-           implements android.hardware.Camera.CameraDataCallback {
-            @Override
-        public void onCameraData(int [] data, android.hardware.Camera camera) {
-            //if(!mPreviewing || !mHiston || !mFirstTimeInitialized){
-            if(!mHiston || !mFirstTimeInitialized){
-                return;
-            }
-            //The first element in the array stores max hist value . Stats data begin from second value
-            synchronized(statsdata) {
-                System.arraycopy(data,0,statsdata,0,STATS_DATA);
-            }
-            mActivity.runOnUiThread(new Runnable() {
-                public void run() {
-                    if(mGraphView != null)
-                        mGraphView.PreviewChanged();
-                }
-           });
-        }
-    }
-
-    private final class MetaDataCallback
-           implements android.hardware.Camera.CameraMetaDataCallback{
-        private static final int QCAMERA_METADATA_HDR = 3;
-        private static final int QCAMERA_METADATA_RTB = 5;
-        private int mLastMessage = -1;
-
-        @Override
-        public void onCameraMetaData (byte[] data, android.hardware.Camera camera) {
-            int metadata[] = new int[3];
-            if (data.length >= 12) {
-                for (int i =0;i<3;i++) {
-                    metadata[i] = byteToInt( (byte []) data, i*4);
-                }
-                /* Checking if the meta data is for auto HDR */
-                if (metadata[0] == QCAMERA_METADATA_HDR) {
-                    if (metadata[2] == 1) {
-                        mAutoHdrEnable = true;
-                        mActivity.runOnUiThread(new Runnable() {
-                            public void run() {
-                                if (mDrawAutoHDR != null)
-                                    mDrawAutoHDR.AutoHDR();
-                            }
-                        });
-                    }
-                    else {
-                        mAutoHdrEnable = false;
-                        mActivity.runOnUiThread(new Runnable() {
-                            public void run() {
-                                if (mDrawAutoHDR != null)
-                                    mDrawAutoHDR.AutoHDR();
-                            }
-                        });
-                    }
-                } else if (metadata[0] == QCAMERA_METADATA_RTB) {
-                    final String tip;
-                    Log.d(TAG,"QCAMERA_METADATA_RTB msgtype =" +metadata[2]);
-                    switch (metadata[2]) {
-                        case TOO_FAR:
-                            tip = "Too far";
-                            break;
-                        case TOO_NEAR:
-                            tip = "Too near";
-                            break;
-                        case LOW_LIGHT:
-                            tip = "Low light";
-                            break;
-                        case SUBJECT_NOT_FOUND:
-                            tip = "Object not found";
-                            break;
-                        case DEPTH_EFFECT_SUCCESS:
-                            tip = "Depth effect success";
-                            break;
-                        case NO_DEPTH_EFFECT:
-                            tip = "NO depth effect";
-                            break;
-                        default:
-                            tip = "Message type =" + metadata[2];
-                            break;
-                    }
-                    mDepthSuccess = metadata[2] == DEPTH_EFFECT_SUCCESS;
-                    mActivity.runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            if (mBokehTipText != null) {
-                                if (!mDepthSuccess) {
-                                    mBokehTipText.setVisibility(View.VISIBLE);
-                                    mBokehTipText.setText(tip);
-                                } else {
-                                    mBokehTipText.setVisibility(View.GONE);
-                                }
-                            }
-                            mUI.enableBokehFocus(mDepthSuccess);
-                        }
-                    });
-                }
-            }
-        }
-
-        private int byteToInt (byte[] b, int offset) {
-            int value = 0;
-            for (int i = 0; i < 4; i++) {
-                int shift = (4 - 1 - i) * 8;
-                value += (b[(3-i) + offset] & 0x000000FF) << shift;
-            }
-            return value;
         }
     }
 
@@ -1819,7 +1699,6 @@ public class PhotoModule
         if(mHiston) {
             if (mSnapshotMode != CameraInfoWrapper.CAMERA_SUPPORT_MODE_ZSL) {
                 mHiston = false;
-                mCameraDevice.setHistogramMode(null);
             }
             mActivity.runOnUiThread(new Runnable() {
                 public void run() {
@@ -1896,7 +1775,7 @@ public class PhotoModule
         mSaveBokehXmp = mIsBokehMode && mDepthSuccess;
 
         if (mCameraState == LONGSHOT) {
-            mLongShotCaptureCountLimit = SystemProperties.getInt(
+            mLongShotCaptureCountLimit = PersistUtil.getInt(
                                     "persist.sys.camera.longshot.shotnum", 0);
             mLongShotCaptureCount = 1;
             if(mLongshotSave) {
@@ -2211,9 +2090,6 @@ public class PhotoModule
         if (!bokehMode.equals(mActivity.getString(
                 R.string.pref_camera_bokeh_mode_entry_value_disable))) {
             mIsBokehMode = true;
-            if (mCameraDevice != null) {
-                mCameraDevice.setMetadataCb(mMetaDataCallback);
-            }
             mUI.overrideSettings(CameraSettings.KEY_FLASH_MODE, Parameters.FLASH_MODE_OFF);
             mUI.overrideSettings(CameraSettings.KEY_SCENE_MODE, Parameters.SCENE_MODE_AUTO);
             final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(mActivity);
@@ -2225,9 +2101,6 @@ public class PhotoModule
             mBokehTipText.setVisibility(View.VISIBLE);
         } else {
             mIsBokehMode = false;
-            if (mCameraDevice != null) {
-                mCameraDevice.setMetadataCb(null);
-            }
             mUI.overrideSettings(CameraSettings.KEY_BOKEH_MPO,
                     mActivity.getString(R.string.pref_camera_bokeh_mpo_default));
             mUI.overrideSettings(CameraSettings.KEY_BOKEH_BLUR_VALUE,
@@ -3748,7 +3621,6 @@ public class PhotoModule
                     }
                 });
                 mParameters.setSceneMode("asd");
-                mCameraDevice.setMetadataCb(mMetaDataCallback);
             }
             else {
                 mAutoHdrEnable = false;
@@ -3850,7 +3722,6 @@ public class PhotoModule
                         }
                     }
                 });
-                mCameraDevice.setHistogramMode(mStatsCallback);
                 mHiston = true;
             } else {
                 mHiston = false;
@@ -3860,7 +3731,6 @@ public class PhotoModule
                              mGraphView.setVisibility(View.INVISIBLE);
                          }
                     });
-                mCameraDevice.setHistogramMode(null);
             }
         }
 

@@ -29,9 +29,12 @@ import android.hardware.Camera.CameraInfo;
 import android.hardware.Camera.Parameters;
 import android.hardware.Camera.Size;
 import android.media.CamcorderProfile;
+import android.media.MediaCodecInfo;
+import android.media.MediaCodecInfo.CodecCapabilities;
+import android.media.MediaCodecInfo.VideoCapabilities;
+import android.media.MediaCodecList;
+import android.media.MediaFormat;
 import android.media.MediaRecorder;
-import android.media.EncoderCapabilities;
-import android.media.EncoderCapabilities.VideoEncoderCap;
 import java.util.HashMap;
 import android.util.Log;
 
@@ -39,6 +42,7 @@ import com.android.camera.util.ApiHelper;
 import com.android.camera.util.CameraUtil;
 import com.android.camera.util.GcamHelper;
 import com.android.camera.util.PersistUtil;
+import com.android.camera.util.SettingTranslation;
 import org.codeaurora.snapcam.R;
 import org.codeaurora.snapcam.wrapper.CamcorderProfileWrapper;
 import org.codeaurora.snapcam.wrapper.ParametersWrapper;
@@ -48,7 +52,6 @@ import java.util.List;
 import java.util.Locale;
 import android.os.Build;
 import java.util.StringTokenizer;
-import android.os.SystemProperties;
 
 /**
  *  Provides utilities and keys for Camera settings.
@@ -731,18 +734,22 @@ public class CameraSettings {
         return split(str);
     }
 
-    private static List<String> getSupportedVideoEncoders() {
-        ArrayList<String> supported = new ArrayList<String>();
+    private static List<String> getSupportedVideoEncoders() { ArrayList<String> supported = new ArrayList<String>();
         String str = null;
-        List<VideoEncoderCap> videoEncoders = EncoderCapabilities.getVideoEncoders();
-        for (VideoEncoderCap videoEncoder: videoEncoders) {
-            str = VIDEO_ENCODER_TABLE.get(videoEncoder.mCodec);
-            if (str != null) {
-                supported.add(str);
+        MediaCodecList list = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
+        for (MediaCodecInfo info :list.getCodecInfos()) {
+            Log.d(TAG, "info getName is " + info.getName());
+            if (info.isEncoder() && info.getName().contains("h263")) {
+                supported.add("h263");
+            } else if (info.isEncoder() && info.getName().contains("h264")) {
+                supported.add("h264");
+            } else if (info.isEncoder() && info.getName().contains("h265")) {
+                supported.add("h265");
+            } else if (info.isEncoder() && info.getName().contains("mpeg4")) {
+                supported.add("m4v");
             }
         }
         return supported;
-
     }
 
     private static List<String> getSupportedZoomLevel(Parameters params) {

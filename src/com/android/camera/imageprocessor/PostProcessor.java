@@ -134,6 +134,7 @@ public class PostProcessor{
     private CameraCaptureSession mCaptureSession;
     private ImageReader mImageReader;
     private ImageReader mZSLReprocessImageReader;
+    private static boolean mIsSupported = false;
     private boolean mUseZSL = true;
     private boolean mProcessZSL = true;
     private boolean mSaveRaw = false;
@@ -1075,7 +1076,7 @@ public class PostProcessor{
                             filter.addImage(resultImage.outBuffer, null, 0, new Boolean(false));
                         }
 
-                        if(isSelfieMirrorOn() && !mController.isBackCamera()) {
+                        if(isSelfieMirrorOn() && !mController.isBackCamera() && mIsSupported) {
                             boolean isVertical = true;
                             if (mOrientation == 0 || mOrientation == 180) {
                                 isVertical = false;
@@ -1135,26 +1136,6 @@ public class PostProcessor{
             return null;
         }
         return mTotalCaptureResultList.get(0);
-    }
-
-    private ImageFilter.ResultImage resizeImage(ImageFilter.ResultImage oldImage, Size newSize) {
-        ImageFilter.ResultImage newImage = new ImageFilter.ResultImage(
-                ByteBuffer.allocateDirect(newSize.getWidth() * newSize.getHeight() * 3/2),
-                new Rect(0, 0,
-                        newSize.getWidth(), newSize.getHeight()),
-                newSize.getWidth(), newSize.getHeight(), newSize.getWidth());
-        int ratio = nativeResizeImage(oldImage.outBuffer.array(), newImage.outBuffer.array(),
-                oldImage.width, oldImage.height, oldImage.stride, newSize.getWidth(), newSize.getHeight());
-        newImage.outRoi = new Rect(oldImage.outRoi.left/ratio, oldImage.outRoi.top/ratio,
-                                       oldImage.outRoi.right/ratio, oldImage.outRoi.bottom/ratio);
-        if(newImage.width < newImage.outRoi.width()) {
-            newImage.outRoi.right = newImage.width;
-        }
-        if(newImage.height < newImage.outRoi.height()) {
-            newImage.outRoi.bottom = newImage.height;
-        }
-        Log.d(TAG, "Image is resized by SW with the ratio: "+ratio+" oldRoi: "+oldImage.outRoi.toString());
-        return newImage;
     }
 
     ImageReader.OnImageAvailableListener processedImageAvailableListener = new ImageReader.OnImageAvailableListener() {
@@ -1235,10 +1216,14 @@ public class PostProcessor{
         }
     }
 
-    private native int nativeNV21Split(byte[] srcYVU, ByteBuffer yBuf, ByteBuffer vuBuf, int width, int height, int srcStride, int dstStride);
-    private native int nativeResizeImage(byte[] oldBuf, byte[] newBuf, int oldWidth, int oldHeight, int oldStride, int newWidth, int newHeight);
     private native int nativeFlipNV21(byte[] buf, int stride, int height, int gap, boolean isVertical);
     static {
-        System.loadLibrary("jni_imageutil");
+        try {
+            System.loadLibrary("jni_imageutil");
+            mIsSupported = true;
+        } catch (UnsatisfiedLinkError e) {
+            Log.d(TAG, e.toString());
+            mIsSupported = false;
+        }
     }
 }
