@@ -1284,7 +1284,7 @@ private void filterHFROptions() {
         try {
             byte bsgc_available = mCharacteristics.get(id).get(CaptureModule.bsgcAvailable);
             ret = bsgc_available == 1;
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException | NullPointerException e) {
             e.printStackTrace();
         }
         return ret;
@@ -1295,7 +1295,7 @@ private void filterHFROptions() {
         try {
             Byte logicalMode = mCharacteristics.get(id).get(CaptureModule.logicalMode);
             isLogicalCamera = logicalMode != null && logicalMode == (byte) 1;
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException | NullPointerException e) {
             e.printStackTrace();
         }
         return isLogicalCamera;
