@@ -29,6 +29,8 @@ LOCAL_VENDOR_MODULE := true
 LOCAL_PRIVILEGED_MODULE := true
 #LOCAL_PRIVATE_PLATFORM_APIS:=true
 
+LOCAL_AAPT_FLAGS += --rename-manifest-package org.codeaurora.snapdragoncam
+
 LOCAL_SDK_VERSION := current
 LOCAL_RENDERSCRIPT_TARGET_API := 23
 LOCAL_JACK_ENABLED := disabled
